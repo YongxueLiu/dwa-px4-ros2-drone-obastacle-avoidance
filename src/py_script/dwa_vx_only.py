@@ -1,3 +1,7 @@
+'''
+writer: liu Yongxue
+email: 805110687@qq.com
+'''
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy

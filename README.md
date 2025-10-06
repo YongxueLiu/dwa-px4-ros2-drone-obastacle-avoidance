@@ -125,7 +125,7 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## 依赖要求
 
-- ROS2 Foxy或Humble
+- ROS2
 - PX4 SITL（软件在环）带无人机模型
 - 激光雷达仿真
 - 

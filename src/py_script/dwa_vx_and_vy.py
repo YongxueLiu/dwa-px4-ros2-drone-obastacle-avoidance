@@ -83,9 +83,90 @@ class DroneAvoidance(Node):
         self.heartbeat_thread.start()
         self.get_logger().info("DroneAvoidance node initialized")
 
+    # def scan_cb(self, msg):
+    #     self.scan = msg
+    #     #self.get_logger().info("Received LaserScan data")
+
     def scan_cb(self, msg):
-        self.scan = msg
-        #self.get_logger().info("Received LaserScan data")
+        """
+        接收原始 LaserScan，对 ranges 进行：
+        1. 值域滤波（去除过小/过大/ inf/nan）
+        2. 跳变滤波（相邻点突变过大时视为无效）
+        3. 孤立点移除（邻域点太少视为噪声）
+        最后把处理后的 ranges 写回 self.scan，保持类型不变
+        """
+
+        self.scan = msg  # 先接收原始消息
+    
+        if not msg.ranges:
+            return
+    
+        ranges = np.array(msg.ranges, dtype=np.float32)
+        angle_inc = msg.angle_increment
+        n = len(ranges)
+    
+        # -------------------------------
+        # 1. 值域滤波
+        # -------------------------------
+        # 常见雷达：小于 0.08~0.15m 可能是机体/地面反射
+        # 大于 range_max * 0.98 或 inf/nan 视为无效
+        min_valid = 0.12          # 可调，根据你的雷达和安装高度
+        max_valid = msg.range_max * 0.95
+    
+        invalid_mask = (ranges < min_valid) | (ranges > max_valid) | \
+                       np.isinf(ranges) | np.isnan(ranges)
+    
+        # 临时把无效点设为 nan，方便后续处理
+        ranges[invalid_mask] = np.nan
+    
+        # -------------------------------
+        # 2. 跳变滤波（相邻点差值太大视为跳变）
+        # -------------------------------
+        jump_thresh = 0.6          # 相邻点跳变超过 60cm 认为有问题，可调
+        diff = np.diff(ranges, prepend=ranges[0])  # 前向差分
+        jump_mask = np.abs(diff) > jump_thresh
+    
+        # 把跳变点及其前后一个点都标记为 nan
+        for i in np.where(jump_mask)[0]:
+            start = max(0, i - 1)
+            end = min(n, i + 2)
+            ranges[start:end] = np.nan
+    
+        # -------------------------------
+        # 3. 孤立点移除（简单统计邻域滤波）
+        # -------------------------------
+        # 窗口大小（左右各几个点）
+        window = 5
+        min_neighbors = 3          # 窗口内至少要有几个有效点才保留
+    
+        filtered_ranges = ranges.copy()
+    
+        for i in range(n):
+            if np.isnan(ranges[i]):
+                continue
+    
+            # 取左右 window//2 个点
+            left = max(0, i - window//2)
+            right = min(n, i + window//2 + 1)
+            window_values = ranges[left:right]
+            valid_count = np.sum(~np.isnan(window_values))
+    
+            if valid_count < min_neighbors:
+                filtered_ranges[i] = np.nan
+    
+        # -------------------------------
+        # 最后处理：把 nan 替换为 range_max（最远距离），常见做法
+        # 或者替换为 0（但 0 可能被误认为很近障碍）
+        # 这里统一替换为 range_max，表示“没看到东西”
+        # -------------------------------
+        filtered_ranges[np.isnan(filtered_ranges)] = msg.range_max
+    
+        # 写回 self.scan
+        self.scan.ranges = filtered_ranges.tolist()
+    
+        # 可选：调试输出（上线可注释）
+        # valid_count = np.sum(filtered_ranges < msg.range_max * 0.9)
+        # self.get_logger().info(f"LaserScan 预处理完成，有效点数: {valid_count}/{n}")
 
     def vehicle_local_position_callback(self, msg):
         self.local_position = msg

@@ -84,8 +84,39 @@ class DroneAvoidance(Node):
         self.get_logger().info("DroneAvoidance node initialized")
 
     # def scan_cb(self, msg):
-    #     self.scan = msg
-    #     #self.get_logger().info("Received LaserScan data")
+    # """
+    # 接收原始 LaserScan，仅对 ranges 进行中值滤波处理（保留边缘，抑制噪声）
+    # 处理后写回 self.scan.ranges，类型和名字不变
+    # """
+    #     import numpy as np
+    #     from scipy.ndimage import median_filter
+    
+    #     self.scan = msg  # 先接收原始消息
+    
+    #     if not msg.ranges:
+    #         return
+    
+    #     ranges = np.array(msg.ranges, dtype=np.float32)
+    #     n = len(ranges)
+    
+    #     # 先把 inf/nan 替换为 range_max（中值滤波需要数值数组）
+    #     max_range = msg.range_max
+    #     ranges[np.isinf(ranges) | np.isnan(ranges)] = max_range
+    
+    #     # 可选：值域简单裁剪（防止极端异常值影响中值）
+    #     min_valid = 0.10  # 根据你的雷达安装高度调整，滤掉过近的机体/地面反射
+    #     ranges[ranges < min_valid] = max_range
+    
+    #     # 中值滤波（窗口大小 5，沿角度序列一维滤波）
+    #     # size=5 是常见平衡值：去噪好且保留边缘
+    #     filtered_ranges = median_filter(ranges, size=5, mode='nearest')
+    
+    #     # 写回 self.scan
+    #     self.scan.ranges = filtered_ranges.tolist()
+    
+    #     # 可选调试（上线可注释）
+    #     # valid_count = np.sum(filtered_ranges < max_range * 0.9)
+    #     # self.get_logger().info(f"LaserScan 中值滤波完成，有效点数约: {valid_count}/{n}")
 
     def scan_cb(self, msg):
         """
